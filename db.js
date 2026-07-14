@@ -8,7 +8,14 @@ db.exec(`
     level INTEGER DEFAULT 1,
     messageCount INTEGER DEFAULT 0,
     voiceMinutes INTEGER DEFAULT 0
-  )
+  );
+
+  CREATE TABLE IF NOT EXISTS todos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId TEXT NOT NULL,
+    task TEXT NOT NULL,
+    completed INTEGER DEFAULT 0
+  );
 `);
 
 function getUser(userId) {
