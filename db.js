@@ -53,4 +53,16 @@ function getLeaderboard(limit = 10) {
   return db.prepare('SELECT * FROM users ORDER BY xp DESC LIMIT ?').all(limit);
 }
 
-module.exports = { getUser, addXP, getLeaderboard };
+module.exports = { 
+  getUser, 
+  addXP, 
+  getLeaderboard,
+  addTodo
+};
+function addTodo(userId, task) {
+  const result = db.prepare(
+    'INSERT INTO todos (userId, task) VALUES (?, ?)'
+  ).run(userId, task);
+
+  return result.lastInsertRowid;
+}
