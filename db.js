@@ -16,12 +16,25 @@ db.exec(`
     task TEXT NOT NULL,
     completed INTEGER DEFAULT 0
   );
+
+  CREATE TABLE IF NOT EXISTS inventory (
+    userId TEXT NOT NULL,
+    item TEXT NOT NULL,
+    quantity INTEGER DEFAULT 0,
+    PRIMARY KEY (userId, item)
+  );
 `);
+
 try { db.exec('ALTER TABLE users ADD COLUMN balance INTEGER DEFAULT 0'); } catch (e) {}
 try { db.exec('ALTER TABLE users ADD COLUMN lastDaily INTEGER DEFAULT 0'); } catch (e) {}
 try { db.exec('ALTER TABLE users ADD COLUMN dailyStreak INTEGER DEFAULT 0'); } catch (e) {}
 try { db.exec('ALTER TABLE users ADD COLUMN focusMinutesToday INTEGER DEFAULT 0'); } catch (e) {}
 try { db.exec("ALTER TABLE users ADD COLUMN focusDate TEXT DEFAULT ''"); } catch (e) {}
+try { db.exec('ALTER TABLE users ADD COLUMN lastWork INTEGER DEFAULT 0'); } catch (e) {}
+try { db.exec('ALTER TABLE users ADD COLUMN xpBoostUntil INTEGER DEFAULT 0'); } catch (e) {}
+try { db.exec('ALTER TABLE users ADD COLUMN coffeeBoostActive INTEGER DEFAULT 0'); } catch (e) {}
+try { db.exec('ALTER TABLE users ADD COLUMN focusFlameActive INTEGER DEFAULT 0'); } catch (e) {}
+try { db.exec('ALTER TABLE users ADD COLUMN luckyFlipsRemaining INTEGER DEFAULT 0'); } catch (e) {}
 
 function getUser(userId) {
   let user = db.prepare('SELECT * FROM users WHERE userId = ?').get(userId);
@@ -34,7 +47,13 @@ function getUser(userId) {
 
 function addXP(userId, amount, type) {
   const user = getUser(userId);
-  const newXP = user.xp + amount;
+  let finalAmount = amount;
+
+  if (user.xpBoostUntil && Date.now() < user.xpBoostUntil) {
+    finalAmount = Math.round(amount * 1.2);
+  }
+
+  const newXP = user.xp + finalAmount;
   const newLevel = Math.floor(newXP / 100) + 1;
   const leveledUp = newLevel > user.level;
 
@@ -75,26 +94,6 @@ function deleteTodo(userId, id) {
   return db.prepare('DELETE FROM todos WHERE id = ? AND userId = ?').run(id, userId);
 }
 
-function claimDaily(userId) {
-  const user = getUser(userId);
-  const now = Date.now();
-  const oneDay = 24 * 60 * 60 * 1000;
-  const twoDays = 48 * 60 * 60 * 1000;
-
-  if (now - user.lastDaily < oneDay) {
-    const remaining = oneDay - (now - user.lastDaily);
-    return { success: false, remaining };
-  }
-
-  const streak = (now - user.lastDaily < twoDays) ? user.dailyStreak + 1 : 1;
-  const reward = 50 + (streak * 5); // base 50, +5 per streak day
-
-  db.prepare('UPDATE users SET balance = balance + ?, lastDaily = ?, dailyStreak = ? WHERE userId = ?')
-    .run(reward, now, streak, userId);
-
-  return { success: true, reward, streak };
-}
-
 function getBalance(userId) {
   return getUser(userId).balance;
 }
@@ -120,53 +119,98 @@ function getFocusToday(userId) {
   return user.focusDate === getTodayDateString() ? user.focusMinutesToday : 0;
 }
 
-try { db.exec('ALTER TABLE users ADD COLUMN lastWork INTEGER DEFAULT 0'); } catch (e) {}
-try { db.exec('ALTER TABLE users ADD COLUMN streakFreezes INTEGER DEFAULT 0'); } catch (e) {}
-try { db.exec('ALTER TABLE users ADD COLUMN xpBoostUntil INTEGER DEFAULT 0'); } catch (e) {}
-
 function work(userId) {
   const user = getUser(userId);
   const now = Date.now();
-  const cooldown = 60 * 60 * 1000; // 1 hour
+  const cooldown = 60 * 60 * 1000;
 
   if (now - user.lastWork < cooldown) {
     return { success: false, remaining: cooldown - (now - user.lastWork) };
   }
 
-  const earned = Math.floor(Math.random() * 21) + 10; // 10–30 cakes
+  const earned = Math.floor(Math.random() * 21) + 10;
   db.prepare('UPDATE users SET balance = balance + ?, lastWork = ? WHERE userId = ?').run(earned, now, userId);
 
   return { success: true, earned };
 }
 
-function buyStreakFreeze(userId) {
-  const cost = 100;
+function addToInventory(userId, item, qty = 1) {
+  db.prepare(`
+    INSERT INTO inventory (userId, item, quantity) VALUES (?, ?, ?)
+    ON CONFLICT(userId, item) DO UPDATE SET quantity = quantity + excluded.quantity
+  `).run(userId, item, qty);
+}
+
+function getInventory(userId) {
+  return db.prepare('SELECT * FROM inventory WHERE userId = ? AND quantity > 0').all(userId);
+}
+
+function removeFromInventory(userId, item, qty = 1) {
+  const row = db.prepare('SELECT quantity FROM inventory WHERE userId = ? AND item = ?').get(userId, item);
+  if (!row || row.quantity < qty) return false;
+  db.prepare('UPDATE inventory SET quantity = quantity - ? WHERE userId = ? AND item = ?').run(qty, userId, item);
+  return true;
+}
+
+function buyItem(userId, itemKey, cost) {
   const user = getUser(userId);
   if (user.balance < cost) return { success: false };
-  db.prepare('UPDATE users SET balance = balance - ?, streakFreezes = streakFreezes + 1 WHERE userId = ?').run(cost, userId);
+  db.prepare('UPDATE users SET balance = balance - ? WHERE userId = ?').run(cost, userId);
+  addToInventory(userId, itemKey, 1);
   return { success: true };
 }
 
-function buyXPBoost(userId) {
-  const cost = 75;
-  const user = getUser(userId);
-  if (user.balance < cost) return { success: false };
-  const boostUntil = Date.now() + (60 * 60 * 1000); // 1 hour of double XP
-  db.prepare('UPDATE users SET balance = balance - ?, xpBoostUntil = ? WHERE userId = ?').run(cost, boostUntil, userId);
+function useItem(userId, itemKey) {
+  const hasItem = removeFromInventory(userId, itemKey, 1);
+  if (!hasItem) return { success: false };
+
+  if (itemKey === 'coffeeboost') {
+    db.prepare('UPDATE users SET coffeeBoostActive = 1 WHERE userId = ?').run(userId);
+  }
+  if (itemKey === 'goldenbook') {
+    const boostUntil = Date.now() + (60 * 60 * 1000);
+    db.prepare('UPDATE users SET xpBoostUntil = ? WHERE userId = ?').run(boostUntil, userId);
+  }
+  if (itemKey === 'luckyclover') {
+    db.prepare('UPDATE users SET luckyFlipsRemaining = luckyFlipsRemaining + 3 WHERE userId = ?').run(userId);
+  }
+  if (itemKey === 'focusflame') {
+    db.prepare('UPDATE users SET focusFlameActive = 1 WHERE userId = ?').run(userId);
+  }
+
   return { success: true };
+}
+
+function claimDaily(userId) {
+  const user = getUser(userId);
+  const now = Date.now();
+  const oneDay = 24 * 60 * 60 * 1000;
+  const twoDays = 48 * 60 * 60 * 1000;
+
+  if (now - user.lastDaily < oneDay) {
+    const remaining = oneDay - (now - user.lastDaily);
+    return { success: false, remaining };
+  }
+
+  let streak;
+  let shieldUsed = false;
+
+  if (now - user.lastDaily < twoDays) {
+    streak = user.dailyStreak + 1;
+  } else {
+    shieldUsed = removeFromInventory(userId, 'streakshield', 1);
+    streak = shieldUsed ? user.dailyStreak + 1 : 1;
+  }
+
+  const reward = 50 + (streak * 5);
+  db.prepare('UPDATE users SET balance = balance + ?, lastDaily = ?, dailyStreak = ? WHERE userId = ?')
+    .run(reward, now, streak, userId);
+
+  return { success: true, reward, streak, shieldUsed };
 }
 
 module.exports = {
-  getUser,
-  addXP,
-  getLeaderboard,
-  addTodo,
-  getTodos,
-  completeTodo,
-  deleteTodo,
-  claimDaily,
-  getBalance,
-  addBalance,
-  addFocusMinutes,
-  getFocusToday, buyXPBoost, work, buyStreakFreeze
+  getUser, addXP, getLeaderboard, addTodo, getTodos, completeTodo, deleteTodo,
+  claimDaily, getBalance, addBalance, addFocusMinutes, getFocusToday,
+  work, buyItem, useItem, getInventory,
 };

@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { getUser, addXP, getLeaderboard, addTodo, getTodos, completeTodo, deleteTodo, claimDaily, getBalance, addBalance, addFocusMinutes, getFocusToday, work, buyStreakFreeze, buyXPBoost } = require('./db');
-
+const { SHOP } = require('./shop');
+const { getUser, addXP, getLeaderboard, addTodo, getTodos, completeTodo, deleteTodo, claimDaily, getBalance, addBalance, addFocusMinutes, getFocusToday, work, buyItem, useItem, getInventory } = require('./db');
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -149,40 +149,47 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply(`💼 You worked hard and earned <:yummycake:1521406870869246053> **${result.earned} cakes**!`);
     }
   }
-
-  if (interaction.commandName === 'shop') {
-    await interaction.reply({
-      embeds: [{
-        color: 0x2f3136,
-        title: '🛒 Shop',
-        description: 'Buy items with `/buy item:<name>`',
-        fields: [
-          { name: '🧊 Streak Freeze — 100 cakes', value: 'Protects your daily streak if you miss a day.' },
-          { name: '⚡ XP Boost — 75 cakes', value: 'Double XP for 1 hour.' },
-        ],
-      }],
-    });
+if (interaction.commandName === 'shop') {
+    const fields = Object.values(SHOP).map(item => ({
+      name: `${item.emoji} ${item.name} — ${item.cost} cakes`,
+      value: item.description,
+    }));
+    await interaction.reply({ embeds: [{ color: 0x2f3136, title: '🛒 Shop', fields }] });
   }
 
   if (interaction.commandName === 'buy') {
-    const item = interaction.options.getString('item');
+    const key = interaction.options.getString('item');
+    const product = SHOP[key];
+    if (!product) { await interaction.reply('❌ Unknown item.'); return; }
 
-    if (item === 'streakfreeze') {
-      const result = buyStreakFreeze(interaction.user.id);
-      await interaction.reply(
-        result.success
-          ? '🧊 Streak Freeze purchased! It will auto-apply if you miss a daily claim.'
-          : '❌ Not enough cakes for a Streak Freeze (need 100).'
-      );
-    }
+    const result = buyItem(interaction.user.id, key, product.cost);
+    await interaction.reply(
+      result.success
+        ? `${product.emoji} Bought **${product.name}**! Use \`/use item:${key}\` to activate it.`
+        : `❌ Not enough cakes (need ${product.cost}).`
+    );
+  }
 
-    if (item === 'xpboost') {
-      const result = buyXPBoost(interaction.user.id);
-      await interaction.reply(
-        result.success
-          ? '⚡ XP Boost activated! Double XP for the next hour.'
-          : '❌ Not enough cakes for an XP Boost (need 75).'
-      );
+  if (interaction.commandName === 'use') {
+    const key = interaction.options.getString('item');
+    const product = SHOP[key];
+    if (!product) { await interaction.reply('❌ Unknown item.'); return; }
+
+    const result = useItem(interaction.user.id, key);
+    await interaction.reply(
+      result.success
+        ? `${product.emoji} **${product.name}** activated!`
+        : `❌ You don't own that item. Buy it first with \`/buy\`.`
+    );
+  }
+
+  if (interaction.commandName === 'inventory') {
+    const items = getInventory(interaction.user.id);
+    if (items.length === 0) {
+      await interaction.reply('🎒 Your inventory is empty. Visit `/shop` to buy something!');
+    } else {
+      const list = items.map(i => `${SHOP[i.item]?.emoji || '📦'} ${SHOP[i.item]?.name || i.item} x${i.quantity}`).join('\n');
+      await interaction.reply(`🎒 **Inventory**\n${list}`);
     }
   }
 

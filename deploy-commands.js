@@ -1,6 +1,12 @@
 require('dotenv').config();
 console.log(__filename);
 const { REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { SHOP } = require('./shop');
+
+const shopChoices = Object.entries(SHOP).map(([key, item]) => ({
+  name: `${item.emoji} ${item.name} — ${item.cost} cakes`,
+  value: key,
+}));
 
 const commands = [
   new SlashCommandBuilder()
@@ -75,21 +81,6 @@ new SlashCommandBuilder()
   .setDescription('Earn cakes by working'),
 
 new SlashCommandBuilder()
-  .setName('shop')
-  .setDescription('View and buy items with your cakes'),
-
-new SlashCommandBuilder()
-  .setName('buy')
-  .setDescription('Purchase an item from the shop')
-  .addStringOption(option =>
-    option.setName('item').setDescription('Item to buy').setRequired(true)
-      .addChoices(
-        { name: 'Streak Freeze — 100 cakes', value: 'streakfreeze' },
-        { name: 'XP Boost (1hr, 2x XP) — 75 cakes', value: 'xpboost' },
-      )
-  ),
-
-new SlashCommandBuilder()
   .setName('coinflip')
   .setDescription('Bet cakes on a coin flip')
   .addIntegerOption(option =>
@@ -102,6 +93,28 @@ new SlashCommandBuilder()
         { name: 'Tails', value: 'tails' },
       )
   ),
+
+  new SlashCommandBuilder()
+  .setName('shop')
+  .setDescription('View the shop'),
+
+new SlashCommandBuilder()
+  .setName('buy')
+  .setDescription('Purchase an item from the shop')
+  .addStringOption(option =>
+    option.setName('item').setDescription('Item to buy').setRequired(true).addChoices(...shopChoices)
+  ),
+
+new SlashCommandBuilder()
+  .setName('use')
+  .setDescription('Use an item from your inventory')
+  .addStringOption(option =>
+    option.setName('item').setDescription('Item to use').setRequired(true).addChoices(...shopChoices)
+  ),
+
+new SlashCommandBuilder()
+  .setName('inventory')
+  .setDescription('View your items'),
 
 ].map(command => command.toJSON());
 
