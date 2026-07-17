@@ -71,6 +71,25 @@ new SlashCommandBuilder()
   .setDescription('Check your cake balance'),
 
 new SlashCommandBuilder()
+  .setName('work')
+  .setDescription('Earn cakes by working'),
+
+new SlashCommandBuilder()
+  .setName('shop')
+  .setDescription('View and buy items with your cakes'),
+
+new SlashCommandBuilder()
+  .setName('buy')
+  .setDescription('Purchase an item from the shop')
+  .addStringOption(option =>
+    option.setName('item').setDescription('Item to buy').setRequired(true)
+      .addChoices(
+        { name: 'Streak Freeze — 100 cakes', value: 'streakfreeze' },
+        { name: 'XP Boost (1hr, 2x XP) — 75 cakes', value: 'xpboost' },
+      )
+  ),
+
+new SlashCommandBuilder()
   .setName('coinflip')
   .setDescription('Bet cakes on a coin flip')
   .addIntegerOption(option =>

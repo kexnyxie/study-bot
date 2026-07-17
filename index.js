@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { getUser, addXP, getLeaderboard, addTodo, getTodos, completeTodo, deleteTodo, claimDaily, getBalance, addBalance, addFocusMinutes, getFocusToday } = require('./db');
+const { getUser, addXP, getLeaderboard, addTodo, getTodos, completeTodo, deleteTodo, claimDaily, getBalance, addBalance, addFocusMinutes, getFocusToday, work, buyStreakFreeze, buyXPBoost } = require('./db');
 
 const client = new Client({
   intents: [
@@ -11,13 +11,6 @@ const client = new Client({
     GatewayIntentBits.GuildVoiceStates,
   ],
   partials: [Partials.Message, Partials.Reaction],
-});
-client.on('error', (error) => {
-  console.error('Discord client error:', error);
-});
-
-process.on('unhandledRejection', (error) => {
-  console.error('Unhandled promise rejection:', error);
 });
 client.on('error', (error) => {
   console.error('Discord client error:', error);
@@ -143,6 +136,52 @@ client.on('interactionCreate', async (interaction) => {
     } else {
       await interaction.reply(
         `<:yummycake:1521406870869246053> You got your daily **${result.reward} cakes**!! Daily streak: **${result.streak} days** 🔥`
+      );
+    }
+  }
+
+  if (interaction.commandName === 'work') {
+    const result = work(interaction.user.id);
+    if (!result.success) {
+      const mins = Math.ceil(result.remaining / 60000);
+      await interaction.reply(`⏳ You're still tired from work! Try again in ${mins} min.`);
+    } else {
+      await interaction.reply(`💼 You worked hard and earned <:yummycake:1521406870869246053> **${result.earned} cakes**!`);
+    }
+  }
+
+  if (interaction.commandName === 'shop') {
+    await interaction.reply({
+      embeds: [{
+        color: 0x2f3136,
+        title: '🛒 Shop',
+        description: 'Buy items with `/buy item:<name>`',
+        fields: [
+          { name: '🧊 Streak Freeze — 100 cakes', value: 'Protects your daily streak if you miss a day.' },
+          { name: '⚡ XP Boost — 75 cakes', value: 'Double XP for 1 hour.' },
+        ],
+      }],
+    });
+  }
+
+  if (interaction.commandName === 'buy') {
+    const item = interaction.options.getString('item');
+
+    if (item === 'streakfreeze') {
+      const result = buyStreakFreeze(interaction.user.id);
+      await interaction.reply(
+        result.success
+          ? '🧊 Streak Freeze purchased! It will auto-apply if you miss a daily claim.'
+          : '❌ Not enough cakes for a Streak Freeze (need 100).'
+      );
+    }
+
+    if (item === 'xpboost') {
+      const result = buyXPBoost(interaction.user.id);
+      await interaction.reply(
+        result.success
+          ? '⚡ XP Boost activated! Double XP for the next hour.'
+          : '❌ Not enough cakes for an XP Boost (need 75).'
       );
     }
   }

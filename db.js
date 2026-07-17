@@ -120,6 +120,42 @@ function getFocusToday(userId) {
   return user.focusDate === getTodayDateString() ? user.focusMinutesToday : 0;
 }
 
+try { db.exec('ALTER TABLE users ADD COLUMN lastWork INTEGER DEFAULT 0'); } catch (e) {}
+try { db.exec('ALTER TABLE users ADD COLUMN streakFreezes INTEGER DEFAULT 0'); } catch (e) {}
+try { db.exec('ALTER TABLE users ADD COLUMN xpBoostUntil INTEGER DEFAULT 0'); } catch (e) {}
+
+function work(userId) {
+  const user = getUser(userId);
+  const now = Date.now();
+  const cooldown = 60 * 60 * 1000; // 1 hour
+
+  if (now - user.lastWork < cooldown) {
+    return { success: false, remaining: cooldown - (now - user.lastWork) };
+  }
+
+  const earned = Math.floor(Math.random() * 21) + 10; // 10–30 cakes
+  db.prepare('UPDATE users SET balance = balance + ?, lastWork = ? WHERE userId = ?').run(earned, now, userId);
+
+  return { success: true, earned };
+}
+
+function buyStreakFreeze(userId) {
+  const cost = 100;
+  const user = getUser(userId);
+  if (user.balance < cost) return { success: false };
+  db.prepare('UPDATE users SET balance = balance - ?, streakFreezes = streakFreezes + 1 WHERE userId = ?').run(cost, userId);
+  return { success: true };
+}
+
+function buyXPBoost(userId) {
+  const cost = 75;
+  const user = getUser(userId);
+  if (user.balance < cost) return { success: false };
+  const boostUntil = Date.now() + (60 * 60 * 1000); // 1 hour of double XP
+  db.prepare('UPDATE users SET balance = balance - ?, xpBoostUntil = ? WHERE userId = ?').run(cost, boostUntil, userId);
+  return { success: true };
+}
+
 module.exports = {
   getUser,
   addXP,
@@ -132,5 +168,5 @@ module.exports = {
   getBalance,
   addBalance,
   addFocusMinutes,
-  getFocusToday,
+  getFocusToday, buyXPBoost, work, buyStreakFreeze
 };
