@@ -93,6 +93,31 @@ client.on('guildMemberRemove', (member) => {
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
+  if (interaction.commandName === 'profile') {
+    const p = getProfile(interaction.user.id);
+    const totalHours = Math.floor(p.totalFocusMinutes / 60);
+    const totalMins = p.totalFocusMinutes % 60;
+
+    await interaction.reply({
+      embeds: [{
+        color: 0x2f3136,
+        title: `📇 ${interaction.user.username}'s Profile`,
+        thumbnail: { url: interaction.user.displayAvatarURL() },
+        fields: [
+          { name: 'Level', value: `${p.level}`, inline: true },
+          { name: 'XP', value: `${p.xp}`, inline: true },
+          { name: 'Balance', value: `<:yummycake:1521406870869246053> ${p.balance}`, inline: true },
+          { name: 'Daily Streak', value: `🔥 ${p.dailyStreak} days`, inline: true },
+          { name: 'Total Focus Time', value: `${totalHours}h ${totalMins}m`, inline: true },
+          { name: 'Items Owned', value: `🎒 ${p.itemCount}`, inline: true },
+          { name: 'Tasks Completed', value: `${p.completedTodos}/${p.totalTodos}`, inline: true },
+          { name: 'Messages Sent', value: `${p.messageCount}`, inline: true },
+          { name: 'Voice Minutes', value: `${p.voiceMinutes}`, inline: true },
+        ],
+      }],
+    });
+  } 
+  
   if (interaction.commandName === 'todo') {
     const sub = interaction.options.getSubcommand();
 

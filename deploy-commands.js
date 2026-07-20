@@ -116,6 +116,10 @@ new SlashCommandBuilder()
   .setName('inventory')
   .setDescription('View your items'),
 
+new SlashCommandBuilder()
+  .setName('profile')
+  .setDescription('View your study profile'),
+
 ].map(command => command.toJSON());
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);

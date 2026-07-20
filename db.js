@@ -35,6 +35,7 @@ try { db.exec('ALTER TABLE users ADD COLUMN xpBoostUntil INTEGER DEFAULT 0'); } 
 try { db.exec('ALTER TABLE users ADD COLUMN coffeeBoostActive INTEGER DEFAULT 0'); } catch (e) {}
 try { db.exec('ALTER TABLE users ADD COLUMN focusFlameActive INTEGER DEFAULT 0'); } catch (e) {}
 try { db.exec('ALTER TABLE users ADD COLUMN luckyFlipsRemaining INTEGER DEFAULT 0'); } catch (e) {}
+try { db.exec('ALTER TABLE users ADD COLUMN totalFocusMinutes INTEGER DEFAULT 0'); } catch (e) {}
 
 function getUser(userId) {
   let user = db.prepare('SELECT * FROM users WHERE userId = ?').get(userId);
@@ -110,7 +111,17 @@ function addFocusMinutes(userId, minutes) {
   const user = getUser(userId);
   const today = getTodayDateString();
   const total = user.focusDate === today ? user.focusMinutesToday + minutes : minutes;
-  db.prepare('UPDATE users SET focusMinutesToday = ?, focusDate = ? WHERE userId = ?').run(total, today, userId);
+  db.prepare('UPDATE users SET focusMinutesToday = ?, focusDate = ?, totalFocusMinutes = totalFocusMinutes + ? WHERE userId = ?')
+    .run(total, today, minutes, userId);
+  return total;
+}
+
+function addFocusMinutes(userId, minutes) {
+  const user = getUser(userId);
+  const today = getTodayDateString();
+  const total = user.focusDate === today ? user.focusMinutesToday + minutes : minutes;
+  db.prepare('UPDATE users SET focusMinutesToday = ?, focusDate = ?, totalFocusMinutes = totalFocusMinutes + ? WHERE userId = ?')
+    .run(total, today, minutes, userId);
   return total;
 }
 
@@ -209,8 +220,21 @@ function claimDaily(userId) {
   return { success: true, reward, streak, shieldUsed };
 }
 
+function getProfile(userId) {
+  const user = getUser(userId);
+  const todos = getTodos(userId);
+  const completedTodos = todos.filter(t => t.completed).length;
+  const inventory = getInventory(userId);
+
+  return {
+    ...user,
+    completedTodos,
+    totalTodos: todos.length,
+    itemCount: inventory.reduce((sum, i) => sum + i.quantity, 0),
+  };
+}
 module.exports = {
   getUser, addXP, getLeaderboard, addTodo, getTodos, completeTodo, deleteTodo,
   claimDaily, getBalance, addBalance, addFocusMinutes, getFocusToday,
-  work, buyItem, useItem, getInventory,
+  work, buyItem, useItem, getInventory, getProfile,
 };
